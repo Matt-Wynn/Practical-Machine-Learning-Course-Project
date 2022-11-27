@@ -1,0 +1,80 @@
+---
+title: "Practical Machine Learning Project"
+author: "Matt Wynn"
+date: "2022-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction / Executive Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+This project analyzes the datasets provided, produces a predictive model based on appropriate variables of a model training subset, and then accurately predicts the "classe" (method of exercise, correct for or one of 5 types of mistake) for all 20 data points in the test data set. 
+
+## Data Source
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+```{r, include=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+## Download data and setup
+library(caret)
+library(randomForest)
+
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+download.file(trainUrl, destfile=trainFile, method="curl")
+download.file(testUrl, destfile=testFile, method="curl")
+
+train_Raw_Dat <- read.csv("./data/pml-training.csv")
+test_Raw_Dat <- read.csv("./data/pml-testing.csv")
+```
+Both data sets contain 160 variables, the training data set has 19,622 observations, while the test data has 20 observations. We'll next clean the data, by removing NAs and unnecessary variables. 
+
+```{r}
+#removing NAs, time stamp data, and non-numeric data
+train_Clean_Dat <- train_Raw_Dat[, colSums(is.na(train_Raw_Dat)) == 0]
+test_Clean_Dat <- test_Raw_Dat[,colSums(is.na(test_Raw_Dat))==0]
+train_Clean_Dat <- train_Clean_Dat[, -1:-4]
+test_Clean_Dat <- test_Clean_Dat[, -1:-4]
+
+classe_var_train <- train_Clean_Dat$classe  #temp store non-numeric classe variable
+
+train_Clean_Dat <- train_Clean_Dat[,sapply(train_Clean_Dat, is.numeric)]
+test_Clean_Dat <- test_Clean_Dat[,sapply(test_Clean_Dat, is.numeric)]
+
+train_Clean_Dat$classe <- classe_var_train #add back in classe variable
+```
+Removing NAs, non-numeric data (except for "classe"), and the "problem ID" variable, reduced the variables to 53 for training data and 54 for the testing data. 
+
+Next we separate the cleaned training data into model training and model validation data sets, using a 65%/35% split. To avoid nomenclature confusion between the terms testing and training, we'll use "model" in the names for training 
+and validation.
+```{r, echo=TRUE, cashe=TRUE}
+set.seed(37)
+inTrain <- createDataPartition(train_Clean_Dat$classe, p=.65, list = FALSE)
+model_train_Data <- train_Clean_Dat[inTrain, ]
+model_test_data <- train_Clean_Dat[-inTrain, ]
+model_dat <- train(classe ~ ., data = model_train_Data, method = "rf",
+                   trControl = trainControl(number = 5))
+model_dat
+
+predict_model <- predict(model_dat, model_test_data)
+confusionMatrix(factor(model_test_data$classe), predict_model)
+```
+The accuracy of this model is 99.74%, which makes the out of sample error .26% with an extremely small p-value. 
+
+Next, we use the model with the original test data set.
+
+```{r, echo=TRUE}
+model_prediction_result <- predict(model_dat, test_Clean_Dat)
+model_prediction_result
+```
+Conclusion: The result was 100% for the prediction quiz. I was somewhat surprised that including 53 variables produced such accuracy, as it would seem to produce better results by eliminating more variables (and make the train function process quicker). However, it is hard to beat 99.74% accuracy, so no further analysis is required. 
